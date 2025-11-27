@@ -1,0 +1,12 @@
+{
+  "name": "rugby-feed-scraper",
+  "version": "1.0.0",
+  "description": "Scraper for rugby fixtures and results (RugbyPass + SuperSport) outputting JSON for the app.",
+  "type": "module",
+  "scripts": {
+    "update": "node src/update.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12"
+  }
+}
