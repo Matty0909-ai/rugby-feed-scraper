@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Run scraper update
-        run: node update.js
+        run: node src/update.js
 
       - name: Commit & push updated feeds
         run: |
