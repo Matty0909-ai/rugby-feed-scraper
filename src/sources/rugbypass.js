@@ -2,87 +2,83 @@
 import * as cheerio from "cheerio";
 
 /**
- * Fetch HTML from RugbyPass and return fixtures + results arrays.
- * You MUST inspect RugbyPass pages in your browser and adjust selectors.
+ * Basic RugbyPass scraper
+ * - Scrapes the live page for <a class="link-box"> elements
+ * - Parses teams from aria-label: "View Ulster vs Benetton rugby union game stats and news"
+ * - Extracts match ID from the "g=" query parameter in the href
+ *
+ * This is a v1: we only get teams + an ID. Time/venue/competition can be added later
+ * once we inspect more of the DOM structure.
  */
-export async function fetchRugbyPassData() {
-  // TODO: Pick the real URLs you want for fixtures & results:
-  const fixturesUrl = "https://www.rugbypass.com/live/"; // example placeholder
-  const resultsUrl = "https://www.rugbypass.com/results/"; // example placeholder
 
-  const [fixturesHtml, resultsHtml] = await Promise.all([
-    fetch(fixturesUrl).then((r) => r.text()),
-    fetch(resultsHtml).then((r) => r.text())
-  ]);
+export async function fetchRugbyPassData() {
+  const fixturesUrl = "https://www.rugbypass.com/live/"; // adjust if you want a different live URL
+
+  const fixturesHtml = await fetch(fixturesUrl).then((r) => {
+    if (!r.ok) {
+      throw new Error(`RugbyPass HTTP ${r.status}`);
+    }
+    return r.text();
+  });
 
   const fixtures = parseRugbyPassFixtures(fixturesHtml);
-  const results = parseRugbyPassResults(resultsHtml);
+
+  // For now, we don't pull finished results from RugbyPass.
+  // You can extend this later with a proper results page.
+  const results = [];
 
   return { fixtures, results };
 }
 
-/**
- * Parse fixtures HTML from RugbyPass.
- * TODO: open the page in your browser, Inspect Element, and adjust selectors.
- */
 function parseRugbyPassFixtures(html) {
   const $ = cheerio.load(html);
   const out = [];
 
-  // EXAMPLE ONLY – you MUST change this
-  $(".fixture-row").each((_, el) => {
-    const comp = $(el).find(".competition-name").text().trim();
-    const home = $(el).find(".team-home .team-name").text().trim();
-    const away = $(el).find(".team-away .team-name").text().trim();
-    const kickoffText = $(el).find(".match-time").text().trim();
-    const venue = $(el).find(".venue").text().trim();
+  // We target the anchors you showed:
+  // <a href=".../?g=946485" class="link-box" aria-label="View Ulster vs Benetton rugby union game stats and news">
+  $("a.link-box[aria-label*='rugby union']").each((index, el) => {
+    const href = $(el).attr("href") || "";
+    const aria = $(el).attr("aria-label") || "";
 
-    if (!home || !away) return;
+    // Try to get teams from aria-label:
+    // "View Ulster vs Benetton rugby union game stats and news"
+    let home = null;
+    let away = null;
 
-    out.push({
-      id: `rp-fix-${home}-${away}-${kickoffText}`.replace(/\s+/g, "-"),
-      competition: comp || "RugbyPass",
-      home,
-      away,
-      kickoffIso: kickoffText, // ideally convert to real ISO if possible
-      venue
-    });
-  });
+    if (aria.toLowerCase().includes(" vs ")) {
+      // Strip leading "View " and trailing " rugby union game stats and news"
+      let text = aria.replace(/^View\s*/i, "").trim();
+      text = text.replace(/ rugby union game stats and news$/i, "").trim();
+      // Now expecting something like "Ulster vs Benetton"
+      const parts = text.split(/\s+vs\s+/i);
+      if (parts.length === 2) {
+        home = parts[0].trim();
+        away = parts[1].trim();
+      }
+    }
 
-  return out;
-}
+    if (!home || !away) {
+      return; // skip if we can't reliably parse
+    }
 
-/**
- * Parse results HTML from RugbyPass.
- * TODO: tweak selectors to match RugbyPass HTML.
- */
-function parseRugbyPassResults(html) {
-  const $ = cheerio.load(html);
-  const out = [];
+    // Try to pull match ID from ?g=xxxxx in the href.
+    let matchId = null;
+    try {
+      const url = new URL(href, "https://www.rugbypass.com");
+      matchId = url.searchParams.get("g");
+    } catch {
+      // ignore URL parse errors; we'll fallback below
+    }
 
-  $(".result-row").each((_, el) => {
-    const comp = $(el).find(".competition-name").text().trim();
-    const home = $(el).find(".team-home .team-name").text().trim();
-    const away = $(el).find(".team-away .team-name").text().trim();
-    const score = $(el).find(".score").text().trim(); // e.g. "27-24"
-    const venue = $(el).find(".venue").text().trim();
-    const dateText = $(el).find(".match-date").text().trim();
-
-    if (!home || !away || !score) return;
-
-    const [homeScoreRaw, awayScoreRaw] = score.split("-").map((s) => s.trim());
-    const homeScore = Number(homeScoreRaw);
-    const awayScore = Number(awayScoreRaw);
+    const id = matchId || `rp-fix-${home}-${away}-${index}`;
 
     out.push({
-      id: `rp-res-${home}-${away}-${dateText}`.replace(/\s+/g, "-"),
-      competition: comp || "RugbyPass",
+      id,
+      competition: "RugbyPass", // placeholder for now
       home,
       away,
-      homeScore: Number.isNaN(homeScore) ? null : homeScore,
-      awayScore: Number.isNaN(awayScore) ? null : awayScore,
-      playedIso: dateText, // ideally convert
-      venue
+      kickoffIso: null, // unknown for now; can be refined later
+      venue: ""
     });
   });
 
