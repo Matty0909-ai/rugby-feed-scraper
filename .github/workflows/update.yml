@@ -3,7 +3,7 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *" # hourly
+    - cron: "0 * * * *" # runs every hour
 
 jobs:
   update:
@@ -15,9 +15,11 @@ jobs:
 
       - name: Clean workspace
         run: |
-          rm -rf node_modules package-lock.json yarn.lock
+          rm -rf node_modules
+          rm -f package-lock.json
+          rm -f yarn.lock
 
-      - name: Set up Node
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
@@ -30,14 +32,16 @@ jobs:
           echo "=== package.json ==="
           cat package.json
           echo ""
-          echo "=== npm ls undici (who depends on it?) ==="
-          npm ls undici || echo "undici not in tree"
+          echo "=== npm ls undici (debug) ==="
+          npm ls undici || echo "undici NOT FOUND (good)"
 
       - name: Run scraper
         run: npm run update
 
       - name: Show generated files
         run: |
-          ls -R
-          cat data/fixtures.json || echo "no fixtures yet"
-          cat data/results.json || echo "no results yet"
+          echo "=== data/fixtures.json ==="
+          cat data/fixtures.json || echo "fixtures missing"
+          echo ""
+          echo "=== data/results.json ==="
+          cat data/results.json || echo "results missing"
