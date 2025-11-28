@@ -1,11 +1,10 @@
 {
   "name": "rugby-feed-scraper",
   "version": "1.0.0",
+  "main": "src/update.js",
   "type": "module",
-  "scripts": {
-    "update": "node src/update.js"
-  },
   "dependencies": {
-    "cheerio": "^1.0.0-rc.12"
+    "axios": "^1.6.7",
+    "cheerio": "^1.0.0"
   }
 }
