@@ -3,7 +3,7 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *" # hourly, or whatever you like
+    - cron: "0 * * * *" # hourly
 
 jobs:
   update:
@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-              - name: List dependencies
+      - name: List dependencies
         run: |
           echo "=== package.json ==="
           cat package.json
