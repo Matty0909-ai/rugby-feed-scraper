@@ -40,30 +40,26 @@ async function main() {
     console.error("SuperSport failed:", ss.reason);
   }
 
-  // basic de-dupe by id
-  const byId = (acc, row) => {
-    if (!row || !row.id) return acc;
-    if (!acc.map.has(row.id)) {
-      acc.map.set(row.id, row);
-      acc.arr.push(row);
-    }
-    return acc;
-  };
-
-  const fx = fixtures.reduce(
-    byId,
-    { map: new Map(), arr: [] }
-  ).arr;
-
-  const rs = results.reduce(
-    byId,
-    { map: new Map(), arr: [] }
-  ).arr;
+  const fx = dedupeById(fixtures);
+  const rs = dedupeById(results);
 
   writeJson("data/fixtures.json", fx);
   writeJson("data/results.json", rs);
 
   console.log("Done.");
+}
+
+function dedupeById(arr) {
+  const map = new Map();
+  const out = [];
+  for (const row of arr) {
+    if (!row || !row.id) continue;
+    if (!map.has(row.id)) {
+      map.set(row.id, row);
+      out.push(row);
+    }
+  }
+  return out;
 }
 
 main().catch((err) => {
