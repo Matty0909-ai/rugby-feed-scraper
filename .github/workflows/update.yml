@@ -30,5 +30,3 @@ jobs:
           git add data/*.json
           git commit -m "Auto-update feeds" || echo "No changes to commit."
           git push
-- name: Debug installed dependencies
-  run: npm ls
