@@ -1,32 +1,35 @@
 name: Update rugby feeds
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
-  workflow_dispatch: {}      # lets you run manually
+    - cron: "0 * * * *" # hourly, or whatever you like
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Clean workspace
+        run: |
+          rm -rf node_modules package-lock.json yarn.lock
 
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: 18
 
       - name: Install dependencies
         run: npm install
 
-      - name: Run scraper update
-        run: node src/update.js
+      - name: Run scraper
+        run: npm run update
 
-      - name: Commit & push updated feeds
+      - name: Show generated files
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add data/*.json
-          git commit -m "Auto-update feeds" || echo "No changes to commit."
-          git push
+          ls -R
+          cat data/fixtures.json || echo "no fixtures yet"
+          cat data/results.json || echo "no results yet"
