@@ -25,6 +25,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+              - name: List dependencies
+        run: |
+          echo "=== package.json ==="
+          cat package.json
+          echo ""
+          echo "=== npm ls undici (who depends on it?) ==="
+          npm ls undici || echo "undici not in tree"
+
       - name: Run scraper
         run: npm run update
 
