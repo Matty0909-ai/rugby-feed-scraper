@@ -1,68 +1,38 @@
 // src/update.js
-import fs from "fs";
-import path from "path";
+import { writeFileSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import { fetchRugbyPassData } from "./sources/rugbypass.js";
-import { fetchSuperSportData } from "./sources/supersport.js";
+import { fetchApiSportsData } from "./sources/apisports.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
-function writeJson(relativePath, data) {
-  const fullPath = path.join(__dirname, "..", relativePath);
-  fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), "utf8");
-  console.log(`Wrote ${relativePath} (${data.length} rows)`);
+function writeJson(relPath, data) {
+  const fullPath = join(__dirname, "..", relPath);
+  const dir = dirname(fullPath);
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(fullPath, JSON.stringify(data, null, 2), "utf8");
+
+  const count = Array.isArray(data) ? data.length : "n/a";
+  console.log(`Wrote ${relPath} (${count} items)`);
 }
 
 async function main() {
-  console.log("Fetching from sources…");
+  try {
+    console.log("Fetching rugby data from API-SPORTS…");
 
-  const [rp, ss] = await Promise.allSettled([
-    fetchRugbyPassData(),
-    fetchSuperSportData()
-  ]);
+    const { fixtures, results } = await fetchApiSportsData();
 
-  let fixtures = [];
-  let results = [];
+    writeJson("data/fixtures.json", fixtures || []);
+    writeJson("data/results.json", results || []);
 
-  if (rp.status === "fulfilled") {
-    fixtures = fixtures.concat(rp.value.fixtures || []);
-    results = results.concat(rp.value.results || []);
-  } else {
-    console.error("RugbyPass failed:", rp.reason);
+    console.log("Update complete.");
+  } catch (err) {
+    console.error("Update failed:", err);
+    process.exit(1);
   }
-
-  if (ss.status === "fulfilled") {
-    fixtures = fixtures.concat(ss.value.fixtures || []);
-    results = results.concat(ss.value.results || []);
-  } else {
-    console.error("SuperSport failed:", ss.reason);
-  }
-
-  const fx = dedupeById(fixtures);
-  const rs = dedupeById(results);
-
-  writeJson("data/fixtures.json", fx);
-  writeJson("data/results.json", rs);
-
-  console.log("Done.");
 }
 
-function dedupeById(arr) {
-  const map = new Map();
-  const out = [];
-  for (const row of arr) {
-    if (!row || !row.id) continue;
-    if (!map.has(row.id)) {
-      map.set(row.id, row);
-      out.push(row);
-    }
-  }
-  return out;
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main();
