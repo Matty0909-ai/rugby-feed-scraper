@@ -3,11 +3,14 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 * * * *" # hourly, adjust as needed
 
 jobs:
   update:
     runs-on: ubuntu-latest
+
+    env:
+      RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
 
     steps:
       - name: Checkout repo
@@ -29,16 +32,21 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: npm install
 
-      - name: List dependencies
+      - name: Fetch raw API-SPORTS games JSON via curl
         working-directory: ${{ github.workspace }}
+        env:
+          RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
         run: |
-          echo "=== package.json ==="
-          cat package.json
-          echo ""
-          echo "=== npm ls undici ==="
-          npm ls undici || echo "undici not found"
+          mkdir -p data/raw
+          echo "Calling API-SPORTS with curl..."
+          curl -sS \
+            -H "x-apisports-key: ${RUGBY_API_KEY}" \
+            "https://v1.rugby.api-sports.io/games?season=2024" \
+            -o data/raw/apisports-games.json
+          echo "Saved raw JSON to data/raw/apisports-games.json"
+          head -c 1000 data/raw/apisports-games.json || echo "No content"
 
-      - name: Run scraper
+      - name: Run scraper (normalise into fixtures/results)
         working-directory: ${{ github.workspace }}
         run: npm run update
 
@@ -50,5 +58,3 @@ jobs:
           echo ""
           echo "=== results.json ==="
           cat data/results.json || echo "no results"
-env:
-  RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
