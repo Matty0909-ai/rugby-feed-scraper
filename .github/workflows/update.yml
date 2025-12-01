@@ -50,3 +50,5 @@ jobs:
           echo ""
           echo "=== results.json ==="
           cat data/results.json || echo "no results"
+env:
+  RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
