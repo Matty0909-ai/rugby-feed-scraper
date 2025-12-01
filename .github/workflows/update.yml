@@ -40,9 +40,9 @@ jobs:
           mkdir -p data/raw
           echo "Calling API-SPORTS with curl..."
           curl -sS \
-            -H "x-apisports-key: ${RUGBY_API_KEY}" \
-            "https://v1.rugby.api-sports.io/games?season=2024" \
-            -o data/raw/apisports-games.json
+  -H "x-apisports-key: ${RUGBY_API_KEY}" \
+  "https://v1.rugby.api-sports.io/games?season=2023" \
+  -o data/raw/apisports-games.json
           echo "Saved raw JSON to data/raw/apisports-games.json"
           head -c 1000 data/raw/apisports-games.json || echo "No content"
 
