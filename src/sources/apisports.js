@@ -1,3 +1,64 @@
+// src/sources/apisports.js
+import https from "https";
+
+/**
+ * Build a full URL from base + path + query params.
+ */
+function buildUrl(base, path, params = {}) {
+  const url = new URL(path, base);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+  return url.toString();
+}
+
+/**
+ * Basic JSON fetch using Node's https module.
+ * No fetch/undici, no extra deps.
+ */
+function fetchJson(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers }, (res) => {
+      if (res.statusCode !== 200) {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          reject(
+            new Error(
+              `HTTP ${res.statusCode} from API: ${body.slice(0, 300)}`
+            )
+          );
+        });
+        return;
+      }
+
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on("error", reject);
+  });
+}
+
+const BASE_URL = "https://v1.rugby.api-sports.io";
+
+/**
+ * Fetch fixtures & results from API-SPORTS Rugby.
+ *
+ * You MUST set RUGBY_API_KEY as an env var (GitHub Secret).
+ * For now, we query a whole season and then see what comes back.
+ */
 export async function fetchApiSportsData() {
   const apiKey = process.env.RUGBY_API_KEY;
   if (!apiKey) {
@@ -6,7 +67,8 @@ export async function fetchApiSportsData() {
 
   const params = {
     season: 2024
-    // league: 1, // we'll add once we see real data
+    // league: 1, // we'll add a league filter once we see real data
+    // date: "2024-11-30", // alternative once we know what works best
   };
 
   const gamesUrl = buildUrl(BASE_URL, "/games", params);
@@ -32,7 +94,7 @@ export async function fetchApiSportsData() {
   } else {
     console.log(
       "API-SPORTS: response is not an array, raw JSON:",
-      JSON.stringify(json, null, 100).slice(0, 1000)
+      JSON.stringify(json, null, 2).slice(0, 1000)
     );
   }
 
@@ -54,8 +116,7 @@ export async function fetchApiSportsData() {
     const leagueName =
       g.league?.name ||
       g.league?.country ||
-      g.league?.id?.toString() ||
-      "Rugby";
+      (g.league?.id != null ? String(g.league.id) : "Rugby");
 
     const homeName =
       g.teams?.home?.name ||
@@ -95,7 +156,7 @@ export async function fetchApiSportsData() {
       typeof rawHomeScore === "number" ? rawHomeScore : null;
 
     const awayScore =
-      typeof rawAwayScore === "number" ? awayScore : null;
+      typeof rawAwayScore === "number" ? rawAwayScore : null;
 
     const normalized = {
       id: String(fixtureId),
