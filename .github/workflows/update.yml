@@ -3,37 +3,31 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *" # hourly, adjust as needed
+    - cron: "0 * * * *"   # hourly updates
 
 jobs:
   update:
     runs-on: ubuntu-latest
-
-    env:
-      RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Clean workspace
-        working-directory: ${{ github.workspace }}
         run: |
           rm -rf node_modules
           rm -f package-lock.json
           rm -f yarn.lock
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install dependencies
-        working-directory: ${{ github.workspace }}
         run: npm install
 
       - name: Fetch raw API-SPORTS games JSON via curl
-        working-directory: ${{ github.workspace }}
         env:
           RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
         run: |
@@ -41,20 +35,23 @@ jobs:
           echo "Calling API-SPORTS with curl..."
           curl -sS \
             -H "x-apisports-key: ${RUGBY_API_KEY}" \
-            "https://v1.rugby.api-sports.io/games?season=2023" \
+            "https://v1.rugby.api-sports.io/games?league=76&season=2023" \
             -o data/raw/apisports-games.json
-                    echo "Saved raw JSON to data/raw/apisports-games.json"
-                    head -c 1000 data/raw/apisports-games.json || echo "No content"
 
-      - name: Run scraper (normalise into fixtures/results)
-        working-directory: ${{ github.workspace }}
+          echo "Saved raw JSON to data/raw/apisports-games.json"
+          echo "First 400 bytes of response:"
+          head -c 400 data/raw/apisports-games.json || echo "no file"
+
+      - name: Run scraper
         run: npm run update
 
       - name: Show generated files
-        working-directory: ${{ github.workspace }}
         run: |
-          echo "=== fixtures.json ==="
-          cat data/fixtures.json || echo "no fixtures"
-          echo ""
-          echo "=== results.json ==="
-          cat data/results.json || echo "no results"
+          echo "==== FIXTURES ===="
+          cat data/fixtures.json || echo "no fixtures.json"
+          echo
+          echo "==== RESULTS ===="
+          cat data/results.json || echo "no results.json"
+          echo
+          echo "==== RAW ===="
+          ls -R data/raw
