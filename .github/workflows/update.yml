@@ -11,6 +11,7 @@ jobs:
 
     steps:
       - name: Checkout repo
+      # Get the repo contents into the runner
         uses: actions/checkout@v4
 
       - name: Clean workspace
@@ -29,12 +30,12 @@ jobs:
 
       - name: Fetch raw API-SPORTS games JSON via curl
         env:
-          RUGBY_API_KEY: ${{ secrets.RUGBY_API_KEY }}
+          API_RUGBY_KEY: ${{ secrets.API_RUGBY_KEY }}
         run: |
           mkdir -p data/raw
           echo "Calling API-SPORTS with curl..."
           curl -sS \
-            -H "x-apisports-key: ${RUGBY_API_KEY}" \
+            -H "x-apisports-key: ${API_RUGBY_KEY}" \
             "https://v1.rugby.api-sports.io/games?league=76&season=2023" \
             -o data/raw/apisports-games.json
 
@@ -53,5 +54,5 @@ jobs:
           echo "==== RESULTS ===="
           cat data/results.json || echo "no results.json"
           echo
-          echo "==== RAW ===="
-          ls -R data/raw
+          echo "==== RAW DIRECTORY ===="
+          ls -R data || echo "no data dir"
