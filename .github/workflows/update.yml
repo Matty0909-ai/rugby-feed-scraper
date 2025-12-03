@@ -3,11 +3,7 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *" # hourly, adjust if you want
-
-# IMPORTANT: allow this workflow to push commits
-permissions:
-  contents: write
+    - cron: "0 * * * *" # hourly
 
 jobs:
   update:
@@ -17,7 +13,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # needed so we can push back to main
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -28,33 +24,21 @@ jobs:
         run: npm install
 
       - name: Run scraper
+        env:
+          API_RUGBY_KEY: ${{ secrets.API_RUGBY_KEY }}
         run: npm run update
 
-      - name: Show generated files
+      - name: Commit and push updated JSON
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "===== data directory ====="
-          ls -R data || echo "no data dir"
-          echo "===== fixtures.json ====="
-          cat data/fixtures.json || echo "no fixtures.json"
-          echo "===== results.json ====="
-          cat data/results.json || echo "no results.json"
-
-      - name: Commit and push updated data
-        run: |
-          echo "=== git status BEFORE ==="
-          git status
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add data/fixtures.json data/results.json || echo "nothing to add?"
-
-          echo "=== git status AFTER add ==="
-          git status
-
+          git add data/fixtures.json data/results.json
           if git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit."
           else
-            git commit -m "Update fixtures and results from API-SPORTS"
-            git push origin HEAD:main
+            git commit -m "chore: update rugby fixtures/results [skip ci]"
+            git push
           fi
