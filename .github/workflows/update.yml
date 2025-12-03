@@ -3,7 +3,11 @@ name: Update rugby feeds
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"   # hourly updates
+    - cron: "0 * * * *" # hourly, adjust if you want
+
+# IMPORTANT: allow this workflow to push commits
+permissions:
+  contents: write
 
 jobs:
   update:
@@ -11,14 +15,9 @@ jobs:
 
     steps:
       - name: Checkout repo
-      # Get the repo contents into the runner
         uses: actions/checkout@v4
-
-      - name: Clean workspace
-        run: |
-          rm -rf node_modules
-          rm -f package-lock.json
-          rm -f yarn.lock
+        with:
+          fetch-depth: 0   # needed so we can push back to main
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -28,42 +27,34 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Fetch raw API-SPORTS games JSON via curl
-        env:
-          API_RUGBY_KEY: ${{ secrets.API_RUGBY_KEY }}
-        run: |
-          mkdir -p data/raw
-          echo "Calling API-SPORTS with curl..."
-          curl -sS \
-            -H "x-apisports-key: ${API_RUGBY_KEY}" \
-            "https://v1.rugby.api-sports.io/games?league=76&season=2023" \
-            -o data/raw/apisports-games.json
-
-          echo "Saved raw JSON to data/raw/apisports-games.json"
-          echo "First 400 bytes of response:"
-          head -c 400 data/raw/apisports-games.json || echo "no file"
-
       - name: Run scraper
         run: npm run update
 
       - name: Show generated files
         run: |
-          echo "==== FIXTURES ===="
-          cat data/fixtures.json || echo "no fixtures.json"
-          echo
-          echo "==== RESULTS ===="
-          cat data/results.json || echo "no results.json"
-          echo
-          echo "==== RAW DIRECTORY ===="
+          echo "===== data directory ====="
           ls -R data || echo "no data dir"
-                - name: Commit and push updated data
-          run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add data/*.json
+          echo "===== fixtures.json ====="
+          cat data/fixtures.json || echo "no fixtures.json"
+          echo "===== results.json ====="
+          cat data/results.json || echo "no results.json"
+
+      - name: Commit and push updated data
+        run: |
+          echo "=== git status BEFORE ==="
+          git status
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add data/fixtures.json data/results.json || echo "nothing to add?"
+
+          echo "=== git status AFTER add ==="
+          git status
+
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update fixtures and results"
-            git push
+            git commit -m "Update fixtures and results from API-SPORTS"
+            git push origin HEAD:main
           fi
