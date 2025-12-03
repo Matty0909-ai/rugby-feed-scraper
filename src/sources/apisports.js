@@ -1,111 +1,182 @@
 // src/sources/apisports.js
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import https from "https";
+
+const API_BASE = "https://v1.rugby.api-sports.io";
+
+// league 76 = URC, season 2023
+const URC_LEAGUE_ID = 76;
+const SEASON = 2023;
+
+// Small helper to call the API and return parsed JSON
+function fetchFromApi(path, apiKey) {
+  return new Promise((resolve, reject) => {
+    const url = `${API_BASE}${path}`;
+
+    const req = https.request(
+      url,
+      {
+        method: "GET",
+        headers: {
+          "x-apisports-key": apiKey,
+        },
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          let errBody = "";
+          res.setEncoding("utf8");
+          res.on("data", (c) => (errBody += c));
+          res.on("end", () => {
+            reject(
+              new Error(
+                `API responded with ${res.statusCode} for ${url}. Body: ${errBody}`
+              )
+            );
+          });
+          return;
+        }
+
+        let data = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(json);
+          } catch (e) {
+            reject(new Error(`Failed to parse JSON from ${url}: ${e.message}`));
+          }
+        });
+      }
+    );
+
+    req.on("error", (err) => reject(err));
+    req.end();
+  });
+}
 
 /**
- * Read the raw games JSON that the GitHub Action fetched via curl,
- * and normalise it into { fixtures, results }.
+ * Fetch fixtures + results from API-SPORTS directly.
+ * Returns: { fixtures: [...], results: [...] }
  */
 export async function fetchApiSportsData() {
-  const rawPath = resolve("data/raw/apisports-games.json");
-
-  let text;
-  try {
-    text = readFileSync(rawPath, "utf8");
-  } catch (err) {
-    throw new Error(
-      `Could not read ${rawPath}. Did the curl step run successfully? Original error: ${err.message}`
-    );
+  const apiKey = process.env.API_RUGBY_KEY;
+  if (!apiKey) {
+    throw new Error("API_RUGBY_KEY env var is missing");
   }
 
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch (err) {
-    throw new Error(
-      `Failed to parse JSON from ${rawPath}: ${err.message}`
-    );
+  // You can tweak the path later (add date, team, etc.)
+  const path = `/games?league=${URC_LEAGUE_ID}&season=${SEASON}`;
+
+  console.log(`Calling API-SPORTS: ${API_BASE}${path}`);
+  const json = await fetchFromApi(path, apiKey);
+
+  if (!json || !Array.isArray(json.response)) {
+    console.warn("API returned no response array:", JSON.stringify(json));
+    return { fixtures: [], results: [] };
   }
-
-  const games = Array.isArray(json?.response) ? json.response : [];
-
-  console.log(`API-SPORTS (local file): found ${games.length} games`);
 
   const fixtures = [];
   const results = [];
 
-  for (let i = 0; i < games.length; i++) {
-    const g = games[i];
+  json.response.forEach((row, index) => {
+    const gameId =
+      row.id ??
+      row.game_id ??
+      row.fixture?.id ??
+      `game-${URC_LEAGUE_ID}-${SEASON}-${index}`;
 
-    // The Rugby API usually returns:
-    //  - id
-    //  - league: { name, id, ... }
-    //  - teams: { home: { name }, away: { name } }
-    //  - scores: { home: { total }, away: { total } }
-    //  - date
-    //  - venue: { name, city }
-    //  - status: { short }
-    const id = String(g.id ?? g.game_id ?? `game-${i}`);
+    const leagueName =
+      row.league?.name ??
+      row.league_name ??
+      (row.tournament?.name || "Unknown competition");
 
-    const competition = g.league?.name || "Unknown competition";
+    const homeName =
+      row.teams?.home?.name ??
+      row.home?.name ??
+      row.home_team ??
+      "Home team";
 
-    const homeTeam = g.teams?.home?.name || "Home";
-    const awayTeam = g.teams?.away?.name || "Away";
+    const awayName =
+      row.teams?.away?.name ??
+      row.away?.name ??
+      row.away_team ??
+      "Away team";
 
+    const venueName =
+      row.venue?.name ??
+      row.stadium?.name ??
+      row.venue_name ??
+      "";
+    const cityName =
+      row.venue?.city ??
+      row.stadium?.city ??
+      row.city ??
+      "";
+
+    const dateIso =
+      row.date ??
+      row.datetime ??
+      row.fixture?.date ??
+      null;
+
+    // Scores (try a few common shapes)
     const homeScore =
-      g.scores?.home?.total ??
-      g.scores?.home?.points ??
-      g.score?.home ??
+      row.scores?.home ??
+      row.scores?.full?.home ??
+      row.score?.home ??
       null;
-
     const awayScore =
-      g.scores?.away?.total ??
-      g.scores?.away?.points ??
-      g.score?.away ??
+      row.scores?.away ??
+      row.scores?.full?.away ??
+      row.score?.away ??
       null;
-
-    const dateIso = g.date || g.datetime || g.update || null;
-
-    const venue = [g.venue?.name, g.venue?.city].filter(Boolean).join(" • ");
 
     const statusShort =
-      g.status?.short ||
-      g.status?.code ||
-      (typeof g.status === "string" ? g.status : "");
+      row.status?.short ??
+      row.status?.code ??
+      row.status ??
+      "";
 
-    const baseObj = {
-      id,
-      competition,
-      home: homeTeam,
-      away: awayTeam,
+    const statusLong =
+      row.status?.long ??
+      row.status?.description ??
+      "";
+
+    const base = {
+      id: String(gameId),
+      competition: leagueName,
+      home: homeName,
+      away: awayName,
       kickoffIso: dateIso,
-      venue,
+      venue: venueName,
+      city: cityName,
     };
 
-    // Finished game?
-    const finishedCodes = ["FT", "AET", "PEN", "CANC", "WO"];
-    const isFinished = finishedCodes.includes(statusShort);
+    const isFinished =
+      typeof statusShort === "string" &&
+      ["FT", "AET", "PEN"].includes(statusShort.toUpperCase());
 
-    if (isFinished) {
+    if (isFinished && homeScore != null && awayScore != null) {
       results.push({
-        ...baseObj,
+        ...base,
         homeScore,
         awayScore,
-        playedIso: dateIso,
-        status: statusShort,
+        status: statusLong || "Full time",
       });
     } else {
       fixtures.push({
-        ...baseObj,
-        homeScore: null,
-        awayScore: null,
-        status: statusShort || "NS",
+        ...base,
+        homeScore: homeScore ?? null,
+        awayScore: awayScore ?? null,
+        status: statusLong || statusShort || "Scheduled",
       });
     }
-  }
+  });
 
   console.log(
-    `Normalised ${fixtures.length} fixtures and ${results.length} results.`
+    `API-SPORTS: got ${fixtures.length} fixtures and ${results.length} results`
   );
 
   return { fixtures, results };
